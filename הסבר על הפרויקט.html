@@ -72,8 +72,8 @@
         <h3>פרטי הסטודנטים:</h3>
         <ul>
             <li><strong>ניר יאיר</strong> - ת.ז: 211511498</li>
-            <li><strong>דניאל צייגנבוים</strong> - ת.ז: [השלם כאן]</li>
-            <li><strong>יהונתן יחזקאל</strong> - ת.ז: [השלם כאן]</li>
+            <li><strong>דניאל צייגנבוים</strong> - ת.ז: 208666313</li>
+            <li><strong>יהונתן יחזקאל</strong> - ת.ז: 214969248</li>
         </ul>
     </div>
 
@@ -81,15 +81,15 @@
     
     <h3>שימוש בפרומפטים ועזרים (AI):</h3>
     <p>
-        במהלך העבודה נעזרתי ב-Gemini AI למטרות הבאות:
+        במהלך העבודה נעזרנו ב-Gemini AI למטרות הבאות:
         <br>1. ארגון קוד ה-Pipeline המלא לעבודה ב-Google Colab מול נתוני ה-Drive.
         <br>2. פיתוח פונקציית Feature Engineering מתקדמת הכוללת הפרדת רקע באמצעות Otsu Thresholding, חיתוך מדויק במסגרת תוחמת (Bounding Box), ושמירה על פרופורציות (Aspect-Ratio Padding) למניעת עיוותים גיאומטריים.
-        <br>3. כיוונון היפר-פרמטרים (Hyperparameter Tuning) לאלגוריתם ה-KNN והתאמת מטריקת המרחק (Manhattan Distance) לשיפור הדיוק מעבר ל-0.75.
+        <br>3. כיוונון היפר-פרמטרים (Hyperparameter Tuning) לאלגוריתם ה-KNN והתאמת מטריקת המרחק (Manhattan Distance) לשיפור הדיוק.
     </p>
 
     <h3>הסבר על בעיית הלמידה וה-Dataset:</h3>
     <p>
-        הבעיה הנחקרת היא <strong>סיווג מרובה מחלקות (Multi-class Classification)</strong> של תמונות ידיים המדגימות את משחק האבן-נייר-מספריים. מטרת המערכת היא לזהות את תנועת היד מתוך תמונה גולמית ולסווג אותה לאחת משלוש קטגוריות (Rock, Paper, Scissors). הנתונים מחולקים מראש בתיקיות ה-Drive ל-Train ול-Test, ולכן הם נטענים באופן מופפרד ללא חלוקה מחדש.
+        הבעיה הנחקרת היא <strong>סיווג מרובה מחלקות (Multi-class Classification)</strong> של תמונות ידיים המדגימות את משחק האבן-נייר-מספריים. מטרת המערכת היא לזהות את תנועת היד מתוך תמונה גולמית ולסווג אותה לאחת משלוש קטגוריות (Rock, Paper, Scissors). הנתונים מחולקים מראש בתיקיות ה-Drive ל-Train ול-Test, ולכן הם נטענים באופן מופרד ללא חלוקה מחדש.
     </p>
 
     <h3>קוד: טעינת הנתונים וערבוב (Shuffling)</h3>
@@ -99,8 +99,14 @@ import os
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+from sklearn.metrics import f1_score
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.preprocessing import StandardScaler
 from sklearn.utils import shuffle
 
+# ==========================================
+# PART 1: Mount Drive & Set Correct Paths
+# ==========================================
 drive.mount('/content/drive')
 
 base_dir = '/content/drive/MyDrive/ML_Project/Rock_Paper_Scissors/Rock-Paper-Scissors'
@@ -110,12 +116,16 @@ test_dir = os.path.join(base_dir, 'test')
 categories = ['rock', 'paper', 'scissors']
 IMG_SIZE = 48 
 
+# ==================================
+# PART 2: Load Dataset & Shuffle
+# ==================================
 def load_data(directory):
-    """Load images and labels from a given directory with early resizing and secure shuffling."""
+    """Load images and labels from a given directory."""
     X, y = [], []
     for category in categories:
         folder_path = os.path.join(directory, category)
         if not os.path.exists(folder_path):
+            print(f"Warning: Folder not found -> {folder_path}")
             continue
             
         label = categories.index(category)
@@ -123,16 +133,14 @@ def load_data(directory):
             img_path = os.path.join(folder_path, img_name)
             img = cv2.imread(img_path)
             if img is not None:
-                img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                img_resized = cv2.resize(img_rgb, (150, 150))
-                X.append(img_resized)
+                # Convert to RGB for proper plotting
+                X.append(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
                 y.append(label)
                 
-    X = np.array(X)
-    y = np.array(y)
-    # Bulletproof shuffle to prevent sequence bias and maintain exact mapping between images and labels
-    X_shuffled, y_shuffled = shuffle(X, y, random_state=42)
-    return X_shuffled, y_shuffled
+    # Shuffle indices to prevent sequence bias
+    indices = np.arange(len(X))
+    np.random.shuffle(indices)
+    return np.array([X[i] for i in indices]), np.array([y[i] for i in indices])
 
 print("Loading Train and Test datasets separately...")
 X_train_raw, y_train = load_data(train_dir)
@@ -146,52 +154,68 @@ print(f"Loaded {len(X_train_raw)} Train images and {len(X_test_raw)} Test images
         אלגוריתם KNN מתבסס על מרחק מתמטי בין פיקסלים, ולכן רגיש לרעשי רקע ולעיוותים גיאומטריים. פיתחנו צינור עיבוד מתקדם:
         <br>1. <strong>המרת סף אוטומטית (Otsu Thresholding):</strong> הפרדה חדה בין היד לבין הרקע הלבן.
         <br>2. <strong>חיתוך קופסה תוחמת (Bounding Box Crop):</strong> הסרת כל השטחים הלבנים המיותרים מסביב ליד.
-        <br>3. <strong>שמירה על פרופורציות (Aspect-Ratio Padding):</strong> הוספת שוליים שחורים להפיכת הצורה לריבוע מושלם *לפני* ההקטנה (למשל ל-48x48), כדי למנוע מ"נייר" להיראות כמו "אבן" עקב מעיכה.
+        <br>3. <strong>שמירה על פרופורציות (Aspect-Ratio Padding):</strong> הוספת שוליים שחורים להפיכת הצורה לריבוע מושלם *לפני* ההקטנה, כדי למנוע מ"נייר" להיראות כמו "אבן" עקב מעיכה.
     </p>
 
     <div class="code-container">
-<pre><code>def get_hand_mask_and_crop(img_rgb):
+<pre><code># ============================================================
+# PART 3: Feature Engineering (Aspect-Ratio Preserving Crop)
+# ============================================================
+def get_hand_mask_and_crop(img_rgb):
     """
     Applies Grayscale -> Gaussian Blur -> Otsu Thresholding -> Aspect-Ratio Preserving Crop.
     Padding the cropped bounding box to a perfect square before resizing prevents 
-    shape distortion.
+    shape distortion (e.g., stopping 'Paper' from squashing and looking like 'Rock').
     """
     gray = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2GRAY)
     blur = cv2.GaussianBlur(gray, (5, 5), 0)
     
+    # Otsu thresholding separates the hand from the white background
     _, thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
     
+    # Find bounding box to crop out empty background
     points = cv2.findNonZero(thresh)
     if points is not None:
         x, y, w, h = cv2.boundingRect(points)
         cropped_hand = thresh[y:y+h, x:x+w]
         
+        # CRITICAL FIX: Pad the image to a square BEFORE resizing to preserve aspect ratio
         max_dim = max(w, h)
         pad_top = (max_dim - h) // 2
         pad_bottom = max_dim - h - pad_top
         pad_left = (max_dim - w) // 2
         pad_right = max_dim - w - pad_left
         
+        # Add black padding (value=0) around the hand
         square_hand = cv2.copyMakeBorder(cropped_hand, pad_top, pad_bottom, pad_left, pad_right, cv2.BORDER_CONSTANT, value=0)
     else:
         square_hand = thresh
         
+    # Resize to the final grid
     resized = cv2.resize(square_hand, (IMG_SIZE, IMG_SIZE))
-    return resized.flatten()
+    
+    # Important: reshape to 2D for plotting here. Flattening happens later.
+    return resized
+
+print("\n--- Part 2: Feature Engineering (Smart Square Crop) ---")
 
 X_train_masks = np.array([get_hand_mask_and_crop(img) for img in X_train_raw])
 X_test_masks = np.array([get_hand_mask_and_crop(img) for img in X_test_raw])
 
-# Visualization of Feature Engineering
+# ---------------------------------------------------------
+# Feature Engineering Visualization: 1 Row Originals, 1 Row Masks
+# ---------------------------------------------------------
 num_examples = 5
 fig, axes = plt.subplots(2, num_examples, figsize=(15, 6))
+
 for i in range(num_examples):
+    # Top row: Original images
     axes[0, i].imshow(X_train_raw[i])
     axes[0, i].set_title(f"Original: {categories[y_train[i]].capitalize()}")
     axes[0, i].axis('off')
     
-    mask_2d = X_train_masks[i].reshape(IMG_SIZE, IMG_SIZE)
-    axes[1, i].imshow(mask_2d, cmap='gray')
+    # Bottom row: Processed masks
+    axes[1, i].imshow(X_train_masks[i], cmap='gray')
     axes[1, i].set_title("Square Cropped Mask")
     axes[1, i].axis('off')
 
@@ -199,21 +223,27 @@ plt.suptitle("Feature Engineering: Original vs. Aspect-Ratio Preserving Crop", f
 plt.tight_layout()
 plt.show()
 
-from sklearn.preprocessing import StandardScaler
+# Flatten and Normalize for the KNN Algorithm
+X_train_features = X_train_masks.reshape(len(X_train_masks), -1)
+X_test_features = X_test_masks.reshape(len(X_test_masks), -1)
+
 scaler = StandardScaler()
-X_train_scaled = scaler.fit_transform(X_train_masks)
-X_test_scaled = scaler.transform(X_test_masks)
+X_train_scaled = scaler.fit_transform(X_train_features)
+X_test_scaled = scaler.transform(X_test_features)
 </code></pre>
     </div>
 
     <h2>חלק 3 ו-4 – מימוש אלגוריתם הלמידה ואימון</h2>
     <p>
-        בחרנו באלגוריתם <strong>KNN (K-Nearest Neighbors)</strong>. לאחר בדיקות היפר-פרמטרים, הגדרנו <code>n_neighbors = 19</code> כדי למנוע רגישות לרעשים מקומיים (Overfitting), השתמשנו במשקולות מבוססות מרחק (<code>weights='distance'</code>), ובחרנו במטריקת <strong>Manhattan Distance</strong> שמתפקדת בצורה מיטבית על וקטורי פיקסלים במימדיות גבוהה.
+        בחרנו באלגוריתם <strong>KNN (K-Nearest Neighbors)</strong>. לאחר תהליך Hyperparameter Tuning, הגדרנו <code>n_neighbors = 19</code> כדי לשפר את החלקת גבולות ההחלטה (הקטנת Overfitting), השתמשנו במשקולות מבוססות מרחק (<code>weights='distance'</code>), ובחרנו במטריקת <strong>Manhattan Distance</strong> שמוכיחה את עצמה כעמידה יותר למרחקים במימדיות גבוהה של פיקסלים.
     </p>
 
     <div class="code-container">
-<pre><code>from sklearn.neighbors import KNeighborsClassifier
-
+<pre><code># ================================================
+# PART 4: Algorithm Implementation & Training
+# ================================================
+print("\n--- Part 3 & 4: Training KNN Model ---")
+# Using 'manhattan' metric which often performs significantly better on high-dimensional image pixels
 hyperparameters = {
     'n_neighbors': 19,
     'weights': 'distance', 
@@ -229,21 +259,28 @@ print("Training Completed Successfully.")
 
     <h2>חלק 5 – חיזוי ושערוך איכות המודל</h2>
     <p>
-        המודל אומן בהצלחה והופעל על סט הבדיקה (Test Set). איכות המודל נמדדת באמצעות <strong>Macro Average F1-Score</strong> בהתאם לדרישות המטלה עבור סיווג מרובה מחלקות ללא מחלקה מרכזית.
+        המודל הופעל על סט הבדיקה (Test Set). איכות המודל נמדדת באמצעות <strong>Macro Average F1-Score</strong> בהתאם להנחיות עבור סיווג מרובה מחלקות (Multi-Class) ללא מחלקה מרכזית.
     </p>
 
     <div class="code-container">
-<pre><code>from sklearn.metrics import f1_score
+<pre><code># ================================================
+# PART 5: Prediction and Evaluation on Test Set
+# ================================================
+print("\n--- Part 5: Prediction and Model Quality Evaluation ---")
 
 if len(X_test_scaled) > 0:
     y_pred = knn_model.predict(X_test_scaled)
     
+    # ---------------------------------------------------------
+    # Classification Visualization: 5 Rows x 5 Columns (25 Images)
+    # ---------------------------------------------------------
     rows, cols = 5, 5
     fig, axes = plt.subplots(rows, cols, figsize=(18, 18))
     
     for row_idx in range(rows):
         for col_idx in range(cols):
             img_idx = row_idx * cols + col_idx
+            
             if img_idx < len(X_test_raw):
                 ax = axes[row_idx, col_idx]
                 ax.imshow(X_test_raw[img_idx])
@@ -257,17 +294,26 @@ if len(X_test_scaled) > 0:
                 ax.set_title(title_text, color=text_color, fontweight='bold', fontsize=12)
                 ax.axis('off')
         
+        # Add a dashed line separator between rows (except after the last row)
         if row_idx < rows - 1:
-            ax_mid = axes[row_idx, 2]
+            ax_mid = axes[row_idx, 2] # Use the middle column axis as reference
+            # Draw a line spanning across all columns (-2.5 to 3.5 covers 5 columns)
             ax_mid.plot([-2.5, 3.5], [-0.3, -0.3], color='gray', linestyle='--', linewidth=2, transform=ax_mid.transAxes, clip_on=False)
                 
     plt.suptitle("25 Diverse Predictions vs Actual (Test Set)", fontsize=22, fontweight='bold')
+    
+    # Adjust layout to fit the main title
     plt.tight_layout(rect=[0, 0, 1, 0.96]) 
+    # Add significant vertical space between rows
     fig.subplots_adjust(hspace=0.8) 
+    
     plt.show()
     
+    # Calculate Macro Average F1-Score
     macro_f1 = f1_score(y_test, y_pred, average='macro')
-    print(f"\nModel Quality (Macro Average F1-Score): {macro_f1:.4f}")
+    print(f"\n===================================================")
+    print(f"Model Quality (Macro Average F1-Score): {macro_f1:.4f}")
+    print(f"===================================================")
 else:
     print("Test set is empty. Cannot perform evaluation.")
 </code></pre>
