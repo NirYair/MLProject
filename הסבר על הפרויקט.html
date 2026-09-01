@@ -41,7 +41,6 @@
             border-radius: 4px;
             overflow-x: auto;
             margin: 15px 0;
-            page-break-inside: avoid;
         }
         code {
             font-family: Consolas, "Courier New", monospace;
@@ -57,10 +56,27 @@
             border-radius: 5px;
             margin-bottom: 20px;
         }
+        
+        /* הגדרות מיוחדות להדפסה ל-PDF כדי למנוע חיתוך של טקסט או קוד */
         @media print {
-            body { margin: 0; max-width: 100%; }
-            .code-container { border-left-color: #000; background-color: #fff; }
-            h2 { page-break-after: avoid; }
+            body { 
+                margin: 0; 
+                max-width: 100%; 
+            }
+            .code-container { 
+                border-left-color: #000; 
+                background-color: #fff; 
+                page-break-inside: avoid; /* מונע שבירת קוד באמצע העמוד */
+                break-inside: avoid;
+            }
+            h2, h3 { 
+                page-break-after: avoid; /* שומר על הכותרת יחד עם הפסקה שאחריה */
+                break-after: avoid;
+            }
+            p, div, ul, li { 
+                page-break-inside: avoid; /* מונע שבירת פסקאות באמצע */
+                break-inside: avoid;
+            }
         }
     </style>
 </head>
@@ -84,12 +100,12 @@
         במהלך העבודה נעזרנו ב-Gemini AI למטרות הבאות:
         <br>1. ארגון קוד ה-Pipeline המלא לעבודה ב-Google Colab מול נתוני ה-Drive.
         <br>2. פיתוח פונקציית Feature Engineering מתקדמת הכוללת הפרדת רקע באמצעות Otsu Thresholding, חיתוך מדויק במסגרת תוחמת (Bounding Box), ושמירה על פרופורציות (Aspect-Ratio Padding) למניעת עיוותים גיאומטריים.
-        <br>3. כתיבת מנגנון Grid-Search בשילוב 5-Fold Cross Validation להערכת שילובי ההיפר-פרמטרים של אלגוריתם ה-KNN והצגת התוצאות ב-DataFrame כנדרש בבונוס.
+        <br>3. כתיבת מנגנון Grid-Search בשילוב 5-Fold Cross Validation להערכת שילובי ההיפר-פרמטרים של אלגוריתם ה-KNN והצגת התוצאות ב-DataFrame, כנדרש בסעיף ההרחבות.
     </p>
 
     <h3>הסבר על בעיית הלמידה וה-Dataset:</h3>
     <p>
-        הבעיה הנחקרת היא <strong>סיווג מרובה מחלקות (Multi-class Classification)</strong> של תמונות ידיים המדגימות את משחק האבן-נייר-מספריים. מטרת המערכת היא לזהות את תנועת היד מתוך תמונה גולמית ולסווג אותה לאחת משלוש קטגוריות (Rock, Paper, Scissors). הנתונים מחולקים מראש בתיקיות ה-Drive ל-Train ול-Test, ולכן הם נטענים באופן מופרד ללא חלוקה מחדש.
+        הבעיה הנחקרת היא <strong>סיווג מרובה מחלקות (Multi-class Classification)</strong> של תמונות ידיים המדגימות את משחק האבן-נייר-מספריים (Computer Vision). מטרת המערכת היא לזהות את תנועת היד מתוך תמונה גולמית ולסווג אותה לאחת משלוש קטגוריות: Rock, Paper, Scissors. הנתונים מחולקים מראש בתיקיות ה-Drive ל-Train ול-Test, ובהתאם להנחיות המטלה - טענו אותם באופן מופרד ו<strong>לא חילקנו את ה-Datasets הללו שוב</strong>. 
     </p>
 
     <h3>קוד: טעינת הנתונים וערבוב (Shuffling)</h3>
@@ -152,10 +168,10 @@ print(f"Loaded {len(X_train_raw)} Train images and {len(X_test_raw)} Test images
 
     <h2>חלק 2 – Feature Engineering</h2>
     <p>
-        אלגוריתם KNN מתבסס על מרחק מתמטי בין פיקסלים, ולכן רגיש לרעשי רקע ולעיוותים גיאומטריים. פיתחנו צינור עיבוד מתקדם:
+        אלגוריתם KNN מתבסס על מרחק מתמטי בין פיקסלים, ולכן רגיש לרעשי רקע ולעיוותים גיאומטריים. פיתחנו עיבוד מוקדם ייעודי (Preprocessing) וייצרנו 5 דוגמאות ויזואליות מה-Dataset כדי להציג את התהליך:
         <br>1. <strong>המרת סף אוטומטית (Otsu Thresholding):</strong> הפרדה חדה בין היד לבין הרקע הלבן.
         <br>2. <strong>חיתוך קופסה תוחמת (Bounding Box Crop):</strong> הסרת כל השטחים הלבנים המיותרים מסביב ליד.
-        <br>3. <strong>שמירה על פרופורציות (Aspect-Ratio Padding):</strong> הוספת שוליים שחורים להפיכת הצורה לריבוע מושלם *לפני* ההקטנה, כדי למנוע מ"נייר" להיראות כמו "אבן" עקב מעיכה.
+        <br>3. <strong>שמירה על פרופורציות (Aspect-Ratio Padding):</strong> הוספת שוליים שחורים להפיכת הצורה לריבוע מושלם *לפני* ההקטנה, כדי למנוע מ"נייר" (צורה ארוכה) להיראות כמו "אבן" עקב מעיכה גיאומטרית.
     </p>
 
     <div class="code-container">
@@ -202,7 +218,7 @@ X_train_masks = np.array([get_hand_mask_and_crop(img) for img in X_train_raw])
 X_test_masks = np.array([get_hand_mask_and_crop(img) for img in X_test_raw])
 
 # ---------------------------------------------------------
-# Feature Engineering Visualization: 1 Row Originals, 1 Row Masks
+# Feature Engineering Visualization: 1 Row Originals, 1 Row Masks (Showing 5 examples as required)
 # ---------------------------------------------------------
 num_examples = 5
 fig, axes = plt.subplots(2, num_examples, figsize=(15, 6))
@@ -232,10 +248,10 @@ X_test_scaled = scaler.transform(X_test_features)
 </code></pre>
     </div>
 
-    <h2>חלק 3 ו-4 – מימוש אלגוריתם הלמידה, חיפוש פרמטרים (Grid-Search) ואימון (בונוס 6.א)</h2>
+    <h2>חלק 3 ו-4 – אלגוריתם הלמידה, חיפוש פרמטרים (Grid-Search) ואימון (בונוס 6.א)</h2>
     <p>
-        כחלק מההרחבה למטלה, ביצענו סריקת היפר-פרמטרים מקיפה (Grid-Search) במכפלה קרטזית. בדקנו מספרי שכנים שונים (K), שיטות מדידת מרחק (Euclidean vs. Manhattan) ושיטות משקולות (Uniform vs. Distance). 
-        הערכת הביצועים נעשתה על ידי 5-Fold Cross Validation. התוצאות מוצגות בטבלת DataFrame, והפרמוטציה הטובה ביותר נבחרה לאימון הסופי של ה-Trainset כולו.
+        בחרנו באלגוריתם <strong>KNN (K-Nearest Neighbors)</strong>. כחלק מסעיף ההרחבות (6.א), ביצענו סריקת היפר-פרמטרים מקיפה במכפלה קרטזית באמצעות <strong>Grid-Search</strong>. בדקנו מספרי שכנים שונים, שיטות מדידת מרחק (Euclidean לעומת Manhattan) ושיטות משקולות. 
+        הערכת הביצועים נוהלה תחת מעטפת של <strong>5-Fold Cross Validation</strong>. התוצאות הממוצעות מוצגות בטבלת DataFrame, והפרמוטציה הטובה ביותר נבחרה אוטומטית לאימון מחדש של ה-Trainset כולו.
     </p>
 
     <div class="code-container">
@@ -298,7 +314,7 @@ print("\nTraining final model on the entire trainset using the best parameters..
 
     <h2>חלק 5 – חיזוי ושערוך איכות המודל</h2>
     <p>
-        המודל הסופי (שהוא תוצר ה-GridSearchCV שחפף את כל ה-Trainset) הופעל על סט הבדיקה (Test Set). איכות המודל נמדדת באמצעות <strong>Macro Average F1-Score</strong> בהתאם להנחיות עבור סיווג מרובה מחלקות (Multi-Class) ללא מחלקה מרכזית[cite: 2].
+        המודל הסופי הופעל על סט הבדיקה (Test Set) שעבר בדיוק את אותו Preprocessing. מכיוון שמדובר בבעיית סיווג Multi-Class ללא מחלקה מרכזית אחת, איכות המודל נמדדת באמצעות מדד ה-<strong>Macro Average F1-Score</strong> בהתאם לדרישות המטלה. אנו מציגים מטה ויזואליזציה של 25 החיזויים הראשונים על סט הבדיקה.
     </p>
 
     <div class="code-container">
