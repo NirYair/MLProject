@@ -71,9 +71,9 @@
     <div class="student-details">
         <h3>פרטי הסטודנטים:</h3>
         <ul>
-            <li><strong>ניר יאיר</strong> - ת.ז: 211511498</li>
-            <li><strong>דניאל צייגנבוים</strong> - ת.ז: 208666313</li>
-            <li><strong>יהונתן יחזקאל</strong> - ת.ז: 214969248</li>
+            <li><strong>ניר י.</strong> - 1498</li>
+            <li><strong>דניאל צ.</strong> - 6313</li>
+            <li><strong>יהונתן י.</strong> - 9248</li>
         </ul>
     </div>
 
@@ -84,7 +84,7 @@
         במהלך העבודה נעזרנו ב-Gemini AI למטרות הבאות:
         <br>1. ארגון קוד ה-Pipeline המלא לעבודה ב-Google Colab מול נתוני ה-Drive.
         <br>2. פיתוח פונקציית Feature Engineering מתקדמת הכוללת הפרדת רקע באמצעות Otsu Thresholding, חיתוך מדויק במסגרת תוחמת (Bounding Box), ושמירה על פרופורציות (Aspect-Ratio Padding) למניעת עיוותים גיאומטריים.
-        <br>3. כיוונון היפר-פרמטרים (Hyperparameter Tuning) לאלגוריתם ה-KNN והתאמת מטריקת המרחק (Manhattan Distance) לשיפור הדיוק.
+        <br>3. כתיבת מנגנון Grid-Search בשילוב 5-Fold Cross Validation להערכת שילובי ההיפר-פרמטרים של אלגוריתם ה-KNN והצגת התוצאות ב-DataFrame כנדרש בבונוס.
     </p>
 
     <h3>הסבר על בעיית הלמידה וה-Dataset:</h3>
@@ -98,10 +98,12 @@
 import os
 import cv2
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.metrics import f1_score
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import GridSearchCV, KFold
 from sklearn.utils import shuffle
 
 # ==========================================
@@ -125,7 +127,6 @@ def load_data(directory):
     for category in categories:
         folder_path = os.path.join(directory, category)
         if not os.path.exists(folder_path):
-            print(f"Warning: Folder not found -> {folder_path}")
             continue
             
         label = categories.index(category)
@@ -193,8 +194,6 @@ def get_hand_mask_and_crop(img_rgb):
         
     # Resize to the final grid
     resized = cv2.resize(square_hand, (IMG_SIZE, IMG_SIZE))
-    
-    # Important: reshape to 2D for plotting here. Flattening happens later.
     return resized
 
 print("\n--- Part 2: Feature Engineering (Smart Square Crop) ---")
@@ -233,33 +232,73 @@ X_test_scaled = scaler.transform(X_test_features)
 </code></pre>
     </div>
 
-    <h2>חלק 3 ו-4 – מימוש אלגוריתם הלמידה ואימון</h2>
+    <h2>חלק 3 ו-4 – מימוש אלגוריתם הלמידה, חיפוש פרמטרים (Grid-Search) ואימון (בונוס 6.א)</h2>
     <p>
-        בחרנו באלגוריתם <strong>KNN (K-Nearest Neighbors)</strong>. לאחר תהליך Hyperparameter Tuning, הגדרנו <code>n_neighbors = 19</code> כדי לשפר את החלקת גבולות ההחלטה (הקטנת Overfitting), השתמשנו במשקולות מבוססות מרחק (<code>weights='distance'</code>), ובחרנו במטריקת <strong>Manhattan Distance</strong> שמוכיחה את עצמה כעמידה יותר למרחקים במימדיות גבוהה של פיקסלים.
+        כחלק מההרחבה למטלה, ביצענו סריקת היפר-פרמטרים מקיפה (Grid-Search) במכפלה קרטזית. בדקנו מספרי שכנים שונים (K), שיטות מדידת מרחק (Euclidean vs. Manhattan) ושיטות משקולות (Uniform vs. Distance). 
+        הערכת הביצועים נעשתה על ידי 5-Fold Cross Validation. התוצאות מוצגות בטבלת DataFrame, והפרמוטציה הטובה ביותר נבחרה לאימון הסופי של ה-Trainset כולו.
     </p>
 
     <div class="code-container">
 <pre><code># ================================================
-# PART 4: Algorithm Implementation & Training
+# PART 4: Algorithm Implementation, Grid Search & Training
 # ================================================
-print("\n--- Part 3 & 4: Training KNN Model ---")
-# Using 'manhattan' metric which often performs significantly better on high-dimensional image pixels
-hyperparameters = {
-    'n_neighbors': 19,
-    'weights': 'distance', 
-    'metric': 'manhattan' 
+print("\n--- Part 3 & 4: Hyperparameter Tuning (Grid Search & 5-Fold CV) ---")
+
+# Define the hyperparameter grid to search (Cartesian product)
+param_grid = {
+    'n_neighbors': [5, 11, 15, 19, 25],
+    'weights': ['uniform', 'distance'],
+    'metric': ['euclidean', 'manhattan']
 }
 
-print(f"Initializing KNN with hyperparameters: {hyperparameters}")
-knn_model = KNeighborsClassifier(**hyperparameters)
-knn_model.fit(X_train_scaled, y_train)
-print("Training Completed Successfully.")
+knn = KNeighborsClassifier()
+
+# Configure 5-Fold Cross Validation
+cv_strategy = KFold(n_splits=5, shuffle=True, random_state=42)
+
+# Initialize GridSearchCV using Macro F1-Score as the scoring metric
+grid_search = GridSearchCV(
+    estimator=knn, 
+    param_grid=param_grid, 
+    cv=cv_strategy, 
+    scoring='f1_macro', 
+    n_jobs=-1
+)
+
+# Execute Grid Search
+grid_search.fit(X_train_scaled, y_train)
+
+# ---------------------------------------------------------
+# Presenting Results in a DataFrame (As requested in Bonus 6.a)
+# ---------------------------------------------------------
+results_df = pd.DataFrame(grid_search.cv_results_)
+# Filter and rename relevant columns for display
+display_cols = ['param_n_neighbors', 'param_weights', 'param_metric', 'mean_test_score']
+results_df = results_df[display_cols].sort_values(by='mean_test_score', ascending=False)
+results_df.columns = ['K (Neighbors)', 'Weights', 'Distance Metric', 'Mean CV Macro F1']
+
+print("\n>>> Top 5 Hyperparameter Permutations (Cross-Validation Results DataFrame):")
+print("==========================================================================")
+print(results_df.head(5).to_string(index=False))
+print("==========================================================================")
+
+# ---------------------------------------------------------
+# Presenting the Best Permutation
+# ---------------------------------------------------------
+print(f"\n>>> BEST PERMUTATION FOUND:")
+print(f"Parameters: {grid_search.best_params_}")
+print(f"Best Macro Average F1-Score (Cross-Validation): {grid_search.best_score_:.4f}")
+
+# The GridSearchCV automatically refits the best estimator on the entire training set.
+# We extract it here for clarity.
+best_knn_model = grid_search.best_estimator_
+print("\nTraining final model on the entire trainset using the best parameters... Completed.")
 </code></pre>
     </div>
 
     <h2>חלק 5 – חיזוי ושערוך איכות המודל</h2>
     <p>
-        המודל הופעל על סט הבדיקה (Test Set). איכות המודל נמדדת באמצעות <strong>Macro Average F1-Score</strong> בהתאם להנחיות עבור סיווג מרובה מחלקות (Multi-Class) ללא מחלקה מרכזית.
+        המודל הסופי (שהוא תוצר ה-GridSearchCV שחפף את כל ה-Trainset) הופעל על סט הבדיקה (Test Set). איכות המודל נמדדת באמצעות <strong>Macro Average F1-Score</strong> בהתאם להנחיות עבור סיווג מרובה מחלקות (Multi-Class) ללא מחלקה מרכזית[cite: 2].
     </p>
 
     <div class="code-container">
@@ -269,7 +308,8 @@ print("Training Completed Successfully.")
 print("\n--- Part 5: Prediction and Model Quality Evaluation ---")
 
 if len(X_test_scaled) > 0:
-    y_pred = knn_model.predict(X_test_scaled)
+    # Predict using the BEST model found by Grid-Search
+    y_pred = best_knn_model.predict(X_test_scaled)
     
     # ---------------------------------------------------------
     # Classification Visualization: 5 Rows x 5 Columns (25 Images)
@@ -312,7 +352,7 @@ if len(X_test_scaled) > 0:
     # Calculate Macro Average F1-Score
     macro_f1 = f1_score(y_test, y_pred, average='macro')
     print(f"\n===================================================")
-    print(f"Model Quality (Macro Average F1-Score): {macro_f1:.4f}")
+    print(f"Final Model Quality on Test Set (Macro Average F1-Score): {macro_f1:.4f}")
     print(f"===================================================")
 else:
     print("Test set is empty. Cannot perform evaluation.")
