@@ -1,2 +1,2 @@
 מלל הגשה:
-Youtube_Link https://github.com/NirYair/MLProject https://www.kaggle.com/datasets/sanikamal/rock-paper-scissors-dataset 211511498 214969248 208666313
+https://youtu.be/5SF8hW6PRyA https://github.com/NirYair/MLProject https://www.kaggle.com/datasets/sanikamal/rock-paper-scissors-dataset 211511498 214969248 208666313
